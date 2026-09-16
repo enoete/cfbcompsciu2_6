@@ -253,9 +253,9 @@ footer{margin-top:60px;border-top:1px solid var(--line);padding:26px 0 56px;colo
   <div class="panel">
     <table class="dt"><thead><tr><th>Bus</th><th>Carries</th><th>Direction</th><th>Width decides</th></tr></thead>
       <tbody>
-        <tr><td><b>Address bus</b></td><td class="m">WHERE \u2014 a memory address</td><td>One way, CPU \u2192 memory</td><td>How much memory can be addressed at all</td></tr>
-        <tr><td><b>Data bus</b></td><td class="m">WHAT \u2014 the actual data or instruction</td><td>Two ways, CPU \u2194 memory</td><td>How many bits move per transfer</td></tr>
-        <tr><td><b>Control bus</b></td><td class="m">WHEN and WHICH WAY \u2014 read, write, clock, interrupt</td><td>Mixed, mostly CPU outward</td><td>How many different signals exist</td></tr>
+        <tr><td><b>Address bus</b></td><td class="m">WHERE — a memory address</td><td>One way → <b>CPU → memory only</b></td><td>How much memory can be addressed at all</td></tr>
+        <tr><td><b>Data bus</b></td><td class="m">WHAT — the actual data or instruction</td><td>Two ways ↔ <b>CPU and memory, either direction</b></td><td>How many bits move per transfer</td></tr>
+        <tr><td><b>Control bus</b></td><td class="m">WHEN and WHICH WAY — read, write, clock, interrupt</td><td>Mixed, mostly CPU outward</td><td>How many different signals exist</td></tr>
       </tbody></table>
 
     <h3 style="margin:22px 0 6px;font-size:1.05rem">Address bus width — try it</h3>
@@ -269,7 +269,7 @@ footer{margin-top:60px;border-top:1px solid var(--line);padding:26px 0 56px;colo
   </div>
 
   <div class="note real"><b>This is not a theoretical limit.</b> Older 32-bit Windows machines genuinely could not use
-  a fourth stick of RAM, no matter how much you spent. 2\u00b3\u00b2 is 4,294,967,296 \u2014 about 4 GB \u2014 and there
+  a fourth stick of RAM, no matter how much you spent. 2³² is 4,294,967,296 — about 4 GB — and there
   simply were not enough wires to name an address beyond that. The whole industry moved to 64-bit addressing to escape
   it, which buys 16 exabytes and will last a while.</div>
 </div></section>
@@ -300,7 +300,7 @@ footer{margin-top:60px;border-top:1px solid var(--line);padding:26px 0 56px;colo
         <div class="tabs" id="aluOp" style="margin-top:6px"></div>
       </div>
       <div>
-        <span class="mono" style="font-size:.8rem;color:var(--ink2)">Result \u2192 accumulator</span>
+        <span class="mono" style="font-size:.8rem;color:var(--ink2)">Result → accumulator</span>
         <div class="bits" id="aluR" style="margin-top:6px"></div>
         <div style="margin-top:16px"><span class="mono" style="font-size:.8rem;color:var(--ink2)">Flags (five flip-flops)</span>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px" id="aluF"></div></div>
@@ -312,7 +312,7 @@ footer{margin-top:60px;border-top:1px solid var(--line);padding:26px 0 56px;colo
 
   <div class="note win"><b>Flags are flip-flops, and that matters.</b> Each flag is a one-bit register holding a fact
   about the <em>last</em> result: was it zero, was it negative, did it carry, did it overflow, was it even. They stay
-  set until the next operation overwrites them \u2014 which is exactly the memory behaviour from topic 4. And they are
+  set until the next operation overwrites them — which is exactly the memory behaviour from topic 4. And they are
   how a program makes a decision: a conditional jump does nothing more than look at a flag and decide whether to
   overwrite the program counter.</div>
 </div></section>
@@ -363,7 +363,7 @@ footer{margin-top:60px;border-top:1px solid var(--line);padding:26px 0 56px;colo
     <p>The cookies live in the pantry downstairs. Walking down takes a minute. So you bring a few up and keep them in
     a jar on the counter. Now here is the bit that makes it work: people do not eat one cookie. They eat one, then
     another, then another, from the same packet, within a few minutes. That habit is the whole reason the jar is worth
-    having. Programs behave identically \u2014 they use the same variable repeatedly, and they read arrays in order.
+    having. Programs behave identically — they use the same variable repeatedly, and they read arrays in order.
     Cache is a bet on that habit, and it wins over ninety percent of the time.</p>
   </div>
 
@@ -377,14 +377,14 @@ footer{margin-top:60px;border-top:1px solid var(--line);padding:26px 0 56px;colo
       <div><span class="mono" style="font-size:.8rem;color:var(--ink2)">Request an address</span>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px" id="cBtns"></div>
         <div class="btnrow">
-          <button class="btn ghost" id="cLoop">Ask for 12, 13, 12, 13\u2026</button>
+          <button class="btn ghost" id="cLoop">Ask for 12, 13, 12, 13…</button>
           <button class="btn ghost" id="cRand">Ask randomly</button>
           <button class="btn ghost" id="cReset">Empty the cache</button></div>
         <div style="margin-top:16px;font-family:'JetBrains Mono',monospace;font-size:.9rem" id="cStats"></div></div>
     </div>
   </div>
 
-  <div class="note real"><b>Locality of reference \u2014 learn the phrase, it is the exam answer.</b> Programs reuse
+  <div class="note real"><b>Locality of reference — learn the phrase, it is the exam answer.</b> Programs reuse
   the same data soon after using it (temporal locality) and use data stored nearby (spatial locality). Cache exploits
   both. Without those two habits, cache would be useless and every computer you own would be roughly ten times slower.</div>
 </div></section>
