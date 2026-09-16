@@ -597,7 +597,7 @@ function dpRender(){
               ALU:'',FLG:`Z${D.flg.Z} N${D.flg.N}`,CU:'',MEM:''};
   Object.keys(C).forEach(k=>{const t=$('#tv_'+k); if(t) t.textContent=vals[k]===undefined?'':String(vals[k]).slice(0,10);});
   $('#memrows').innerHTML=D.mem.map((m,i)=>
-    `<text class="memrow ${m.a===D.mar?'cur':''}" x="32" y="${118+i*17}">${String(m.a).padStart(2,'0')}  ${esc(m.txt)}</text>`).join('');
+    `<text class="memrow ${m.a===D.mar?'cur':''}" x="32" y="${144+i*13}">${String(m.a).padStart(2,'0')}  ${esc(m.txt)}</text>`).join('');
   $('#dpMsg').className='feedback show '+(D.halted?'bad':'good');
   $('#dpMsg').innerHTML=D.msg||'<b>Ready.</b> Press <b>Next transfer</b> to move one piece of data at a time, or <b>Run</b> to watch the whole program. Every movement you see is a real transfer on a real wire.';
   $('#dpStep').disabled=D.halted||D.busy;
