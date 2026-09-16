@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inside the CPU — CFBC Computer Science</title>
+
+<!-- ===== lesson manifest ===== -->
+<meta property="og:title" content="Inside the CPU">
+<meta property="og:description" content="A working datapath you can watch run: buses, control signals, the ALU opened up to the gates you built yourself, addressing modes and cache.">
+<meta property="og:site_name" content="Computer Science · CFBC">
+<meta name="description" content="CPU architecture — ALU, control unit, register section, bus system, clock, addressing modes, cache, and a live animated fetch-decode-execute datapath.">
+<meta name="theme-color" content="#3B4CA8">
+<meta name="lesson:duration"   content="90 min">
+<meta name="lesson:difficulty" content="Core">
+<meta name="lesson:objectives" content="10">
+<meta name="lesson:questions"  content="40">
+<meta name="lesson:sections"   content="10">
+<meta name="lesson:topics"     content="CPU,ALU,Control unit,Registers,Address bus,Data bus,Control bus,Clock speed,Cache,Addressing modes,Instruction format,Datapath">
+<meta name="lesson:activities" content="Live datapath,Zoom through six levels,ALU bench,Bus width calculator,Addressing mode explorer,Cache simulator,Unit test">
+<meta name="lesson:updated"    content="2026-09-16">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Work+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EDEFF2; --board:#FFFFFF; --ink:#16202C; --ink2:#556577; --ink3:#8996A5;
+  --line:#D2D9E1; --hot:#3B4CA8; --amber:#F2A93B; --violet:#5A4B9C; --mint:#118D77; --red:#E04B2F; --cyan:#0E7C9B; --ochre:#C2762A;
+  --lowbg:#DFE5EC;
+  --shadow:0 1px 0 rgba(22,32,44,.06), 0 12px 28px -18px rgba(22,32,44,.5);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:"Work Sans",system-ui,sans-serif;font-size:17px;line-height:1.65;
+  background-image:linear-gradient(rgba(22,32,44,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(22,32,44,.03) 1px,transparent 1px);background-size:26px 26px}
+h1,h2,h3,h4{font-family:"Space Grotesk",system-ui,sans-serif;line-height:1.12;letter-spacing:-.02em;margin:0}
+p{margin:0 0 1em}
+.wrap{max-width:980px;margin:0 auto;padding:0 22px}
+.mono{font-family:"JetBrains Mono",monospace}
+:focus-visible{outline:3px solid var(--amber);outline-offset:3px;border-radius:4px}
+button{font:inherit}
+.hide{display:none!important}
+
+nav.top{position:sticky;top:0;z-index:50;background:rgba(237,239,242,.93);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+nav.top .wrap{display:flex;gap:4px;overflow-x:auto;padding:9px 22px}
+nav.top a{white-space:nowrap;text-decoration:none;color:var(--ink2);font-size:.84rem;font-weight:500;padding:6px 11px;border-radius:7px}
+nav.top a:hover{background:var(--board);color:var(--ink)}
+nav.top a.home{color:var(--hot);font-weight:600}
+
+.hero{padding:44px 0 14px}
+.eyebrow{font-family:"JetBrains Mono",monospace;font-size:.78rem;color:var(--hot);font-weight:700}
+.hero h1{font-size:clamp(2rem,5.6vw,3.4rem);font-weight:700;margin:12px 0 0}
+.hero .lede{max-width:58ch;color:var(--ink2);font-size:1.08rem;margin-top:16px}
+
+section{padding:52px 0 8px}
+section>.wrap>h2{font-size:clamp(1.6rem,4vw,2.2rem);margin-bottom:6px}
+.sub{color:var(--ink2);max-width:64ch;margin-bottom:26px}
+.panel{background:var(--board);border:1px solid var(--line);border-radius:14px;padding:22px;box-shadow:var(--shadow);margin-bottom:18px}
+.note{border-left:4px solid var(--violet);background:rgba(90,75,156,.06);border-radius:0 10px 10px 0;padding:14px 18px;margin:18px 0}
+.note.warn{border-left-color:var(--amber);background:#FFF6E6}
+.note.win{border-left-color:var(--mint);background:rgba(17,141,119,.07)}
+.note.real{border-left-color:var(--red);background:rgba(224,75,47,.06)}
+.note b{font-family:"Space Grotesk",sans-serif}
+.analogy{border-left:4px solid var(--amber);background:#FFF6E6;border-radius:0 10px 10px 0;padding:16px 18px;margin:0 0 20px}
+.analogy h4{font-size:1rem;margin-bottom:6px;color:#8A5B08}
+.analogy p{margin:0;font-size:.96rem;color:#5D4208}
+
+.btn{border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:9px;padding:10px 18px;font-size:.92rem;font-weight:600;cursor:pointer}
+.btn:hover{background:#0D1620}
+.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn.ghost:hover{background:var(--paper)}
+.btn.accent{background:var(--hot);border-color:var(--hot)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btnrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px}
+.clkbtn{border:2px solid var(--hot);background:var(--board);color:var(--hot);border-radius:10px;padding:10px 18px;font-weight:700;font-size:.9rem;cursor:pointer;font-family:"JetBrains Mono",monospace}
+.clkbtn:hover{background:#EEF0FA}
+.feedback{margin-top:16px;padding:12px 16px;border-radius:10px;font-size:.94rem;display:none}
+.feedback.show{display:block}
+.feedback.good{background:rgba(17,141,119,.1);border-left:4px solid var(--mint)}
+.feedback.bad{background:rgba(224,75,47,.09);border-left:4px solid var(--red)}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+@media (max-width:760px){.two{grid-template-columns:1fr}}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
+.tab{border:1px solid var(--line);background:var(--board);border-radius:9px;padding:8px 15px;font-size:.87rem;cursor:pointer}
+.tab[aria-pressed="true"]{background:var(--hot);color:#fff;border-color:var(--hot)}
+
+/* ---- datapath animation ---- */
+.dpwrap{width:100%;overflow-x:auto;background:var(--board);border:1px solid var(--line);border-radius:12px}
+#dp{display:block;min-width:840px;width:100%;height:auto}
+#dp .box{fill:var(--board);stroke:var(--line);stroke-width:2.5;transition:fill .3s,stroke .3s}
+#dp .box.src{fill:rgba(14,124,155,.14);stroke:var(--cyan);stroke-width:3.5}
+#dp .box.dst{fill:rgba(242,169,59,.22);stroke:var(--amber);stroke-width:3.5}
+#dp .box.busy{fill:rgba(59,76,168,.12);stroke:var(--hot);stroke-width:3.5}
+#dp .bl{font-family:"Space Grotesk",sans-serif;font-size:13px;font-weight:700;fill:var(--ink)}
+#dp .bv{font-family:"JetBrains Mono",monospace;font-size:13px;font-weight:700;fill:var(--hot)}
+#dp .bd{font-family:"Work Sans",sans-serif;font-size:9.5px;fill:var(--ink3)}
+#dp .buswire{stroke:var(--line);stroke-width:7;stroke-linecap:round;transition:stroke .3s}
+#dp .buswire.live{stroke:var(--amber)}
+#dp .stub{stroke:var(--line);stroke-width:2.5;transition:stroke .25s}
+#dp .stub.live{stroke:var(--amber);stroke-width:3.5}
+#dp .ctrl{stroke:var(--violet);stroke-width:2;stroke-dasharray:4 4;opacity:.35;transition:opacity .3s}
+#dp .ctrl.live{opacity:1;stroke-width:3;stroke-dasharray:none}
+#dp #pkt{transition:transform .55s cubic-bezier(.45,.05,.3,1);opacity:0}
+#dp #pkt.on{opacity:1}
+#dp #pkt rect{fill:var(--hot);stroke:#fff;stroke-width:2}
+#dp #pkt text{fill:#fff;font-family:"JetBrains Mono",monospace;font-size:12px;font-weight:700;text-anchor:middle}
+#dp .memrow{font-family:"JetBrains Mono",monospace;font-size:11px;fill:var(--ink2)}
+#dp .memrow.cur{fill:var(--cyan);font-weight:700}
+#dp .cpuedge{fill:none;stroke:var(--hot);stroke-width:2.5;stroke-dasharray:8 5;opacity:.5}
+.phase{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.ph{flex:1 1 100px;text-align:center;border:2px solid var(--line);border-radius:9px;padding:8px;font-size:.84rem;font-weight:600;color:var(--ink3);transition:.3s}
+.ph.on{background:var(--hot);border-color:var(--hot);color:#fff}
+
+/* ---- zoom levels ---- */
+.zoom{display:grid;gap:10px}
+.zl{border:2px solid var(--line);background:var(--board);border-radius:12px;padding:14px 16px;cursor:pointer;text-align:left;transition:.2s}
+.zl:hover{border-color:var(--ink3)}
+.zl[aria-pressed="true"]{border-color:var(--hot);background:rgba(59,76,168,.05);box-shadow:0 0 0 4px rgba(59,76,168,.1)}
+.zl .zt{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.zl h4{font-size:1.02rem}
+.zl .zn{font-family:"JetBrains Mono",monospace;font-size:.7rem;color:var(--hot);font-weight:700}
+.zl p{margin:5px 0 0;font-size:.9rem;color:var(--ink2)}
+.zl .from{display:inline-block;font-size:.7rem;font-weight:600;background:rgba(17,141,119,.14);color:#0B5F50;border-radius:5px;padding:2px 8px;margin-top:7px}
+.zstage{border:1px solid var(--line);border-radius:12px;background:var(--board);padding:16px;margin-top:14px;overflow-x:auto}
+.zstage svg{display:block;min-width:460px;max-width:100%;height:auto}
+
+/* ---- ALU bench ---- */
+.bits{display:flex;gap:5px}
+.bit{width:36px;height:40px;border:2px solid var(--line);background:var(--lowbg);border-radius:8px;
+  font-family:"JetBrains Mono",monospace;font-weight:700;font-size:1rem;color:var(--ink3);cursor:pointer;transition:.15s}
+.bit[aria-pressed="true"]{background:var(--amber);border-color:#D89321;color:#2A1B00}
+.bit.ro{cursor:default}
+.flag{display:inline-flex;gap:6px;align-items:center;border:2px solid var(--line);border-radius:8px;padding:5px 11px;
+  font-family:"JetBrains Mono",monospace;font-size:.82rem;color:var(--ink3)}
+.flag.on{border-color:var(--red);background:rgba(224,75,47,.1);color:#8E2A17;font-weight:700}
+table.dt{border-collapse:collapse;width:100%;font-size:.85rem;margin-top:12px}
+table.dt th,table.dt td{border:1px solid var(--line);padding:7px 9px;text-align:left}
+table.dt th{background:var(--paper);font-size:.74rem;color:var(--ink2)}
+table.dt td.m{font-family:"JetBrains Mono",monospace}
+.mem2{font-family:"JetBrains Mono",monospace;font-size:.84rem}
+.mem2 .r{display:flex;justify-content:space-between;gap:12px;padding:5px 10px;border-radius:6px;border:1px solid transparent}
+.mem2 .r.hit{background:rgba(17,141,119,.14);border-color:var(--mint);font-weight:700}
+.mem2 .r.look{background:rgba(59,76,168,.1);border-color:var(--hot)}
+footer{margin-top:60px;border-top:1px solid var(--line);padding:26px 0 56px;color:var(--ink3);font-size:.86rem}
+</style>
+</head>
+<body>
+
+<nav class="top"><div class="wrap">
+  <a class="home" href="https://enoete.github.io/compsciu1_hub/">← Course hub</a>
+  <a href="#datapath">The live datapath</a>
+  <a href="#zoom">Zoom in</a>
+  <a href="#parts">The four parts</a>
+  <a href="#buses">Buses</a>
+  <a href="#alu">Inside the ALU</a>
+  <a href="#modes">Addressing modes</a>
+  <a href="#cache">Cache</a>
+  <a href="#test">Unit test</a>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <div class="eyebrow">CPU ARCHITECTURE</div>
+  <h1>Inside the machine</h1>
+  <p class="lede">Everything you have built over the last five topics was a part. A gate. An adder. A flip-flop. A
+  register. This is the assembly — the thing all those parts were parts <em>of</em>. And the honest surprise is that
+  there is nothing new in here. A processor is the components you already understand, wired together and given a
+  schedule. Press run and watch a program actually execute.</p>
+
+  <div class="panel" style="margin-top:26px" id="datapath">
+    <div class="phase" id="dpPhase"></div>
+    <div class="dpwrap"><div id="dpHost"></div></div>
+    <div class="feedback show good" id="dpMsg" style="margin-top:14px"></div>
+    <div class="btnrow">
+      <button class="clkbtn" id="dpStep">▲ Next transfer</button>
+      <button class="btn accent" id="dpRun">Run the program</button>
+      <button class="btn ghost" id="dpPause">Pause</button>
+      <button class="btn ghost" id="dpReset">Reset</button>
+      <label style="font-size:.85rem;color:var(--ink2);display:flex;align-items:center;gap:8px">Speed
+        <input type="range" id="dpSpeed" min="1" max="5" value="3"></label>
+    </div>
+    <p style="font-size:.85rem;color:var(--ink3);margin:14px 0 0">The orange block is real data moving on a real wire.
+    Blue outline means a component is sending, amber means it is receiving, and the dashed purple lines are control
+    signals coming from the control unit telling each part what to do.</p>
+  </div>
+</div></header>
+
+<section id="zoom"><div class="wrap">
+  <h2>Everything you built is in there</h2>
+  <p class="sub">This is the part worth slowing down for. A processor is not a mysterious new object — it is six levels
+  of the same thing, and you have personally built the bottom four. Click down through them.</p>
+
+  <div class="analogy">
+    <h4>A city, a street, a house, a brick</h4>
+    <p>Look at a city from a plane and you see districts. Drop lower and you see streets. Lower again and it is
+    individual houses, then rooms, then the bricks in a wall. Nobody thinks a city is made of something other than
+    bricks — it is just bricks arranged at enormous scale. A CPU is the same. Zoom out and it is a chip that runs
+    programs. Zoom all the way in and it is the XOR gate you flipped switches on in topic 2. Nothing was added along
+    the way except arrangement.</p>
+  </div>
+
+  <div class="panel">
+    <div class="zoom" id="zoomList"></div>
+    <div class="zstage" id="zoomStage"></div>
+    <div class="feedback show good" id="zoomMsg" style="margin-top:14px"></div>
+  </div>
+
+  <div class="note win"><b>If you take one thing from this topic, take this.</b> There is no layer where the magic
+  gets added. A processor running a video call is doing nothing that you cannot follow, all the way down to two
+  transistors making a NOT gate. It is just very small, very fast, and there are a very great many of them. The
+  cleverness is entirely in the arrangement, and the arrangement is what you have spent five topics learning.</div>
+</div></section>
+
+<section id="parts"><div class="wrap">
+  <h2>The four parts of a CPU</h2>
+  <p class="sub">Every processor ever made splits into the same four sections. Learn these four and the block diagram
+  in any exam paper becomes readable.</p>
+
+  <div class="analogy">
+    <h4>A kitchen during service</h4>
+    <p>The <b>head chef</b> reads the tickets and shouts who does what, but never cooks — that is the
+    <b>control unit</b>. The <b>line cooks</b> actually chop and fry; that is the <b>ALU</b>. The <b>counter space</b>
+    holding what is being worked on right now is the <b>registers</b>. And the <b>runners</b> carrying plates and
+    ingredients between everybody are the <b>buses</b>. Take away any one of those four and service stops. Nobody in
+    the kitchen is doing two jobs.</p>
+  </div>
+
+  <div class="panel">
+    <div class="tabs" id="partSel"></div>
+    <div id="partBody"></div>
+  </div>
+
+  <div class="note warn"><b>The mistake examiners look for.</b> The control unit does <em>not</em> do calculations,
+  and the ALU does <em>not</em> decide what to do next. If a question asks "what does the control unit do", the answer
+  is decode instructions and generate control signals — never "performs arithmetic". Head chef does not cook.</div>
+</div></section>
+
+<section id="buses"><div class="wrap">
+  <h2>The three buses</h2>
+  <p class="sub">A bus is just a bundle of wires shared by several components. There are three of them and they do
+  genuinely different jobs, which is why the exam keeps asking you to tell them apart.</p>
+
+  <div class="analogy">
+    <h4>Sending a parcel</h4>
+    <p>Three separate things have to happen. You write the <b>address</b> on the box — that is the address bus, and it
+    only ever goes one way, from the CPU outward. The box holds the <b>contents</b> — that is the data bus, and it goes
+    both ways because you both send and receive. And somewhere there is an instruction saying whether this is a
+    delivery or a collection — that is the control bus. Same parcel, three different kinds of information, and
+    confusing them is how parcels end up in the wrong place.</p>
+  </div>
+
+  <div class="panel">
+    <table class="dt"><thead><tr><th>Bus</th><th>Carries</th><th>Direction</th><th>Width decides</th></tr></thead>
+      <tbody>
+        <tr><td><b>Address bus</b></td><td class="m">WHERE \u2014 a memory address</td><td>One way, CPU \u2192 memory</td><td>How much memory can be addressed at all</td></tr>
+        <tr><td><b>Data bus</b></td><td class="m">WHAT \u2014 the actual data or instruction</td><td>Two ways, CPU \u2194 memory</td><td>How many bits move per transfer</td></tr>
+        <tr><td><b>Control bus</b></td><td class="m">WHEN and WHICH WAY \u2014 read, write, clock, interrupt</td><td>Mixed, mostly CPU outward</td><td>How many different signals exist</td></tr>
+      </tbody></table>
+
+    <h3 style="margin:22px 0 6px;font-size:1.05rem">Address bus width — try it</h3>
+    <p style="font-size:.93rem;color:var(--ink2)">The address bus is why a 32-bit machine cannot use more than 4 GB of
+    RAM, and it is a favourite exam calculation. Slide it and watch.</p>
+    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:10px">
+      <input type="range" id="abW" min="4" max="40" value="16" style="flex:1 1 220px">
+      <span class="mono" style="font-weight:700" id="abLbl"></span>
+    </div>
+    <div class="feedback show good" id="abOut" style="margin-top:14px"></div>
+  </div>
+
+  <div class="note real"><b>This is not a theoretical limit.</b> Older 32-bit Windows machines genuinely could not use
+  a fourth stick of RAM, no matter how much you spent. 2\u00b3\u00b2 is 4,294,967,296 \u2014 about 4 GB \u2014 and there
+  simply were not enough wires to name an address beyond that. The whole industry moved to 64-bit addressing to escape
+  it, which buys 16 exabytes and will last a while.</div>
+</div></section>
+
+<section id="alu"><div class="wrap">
+  <h2>Open up the ALU</h2>
+  <p class="sub">The arithmetic logic unit sounds like the clever bit. It is actually the most familiar bit — it is
+  your adder from topic 3, a few logic gates, a multiplexer to choose between them, and some flip-flops to remember
+  what happened.</p>
+
+  <div class="analogy">
+    <h4>A multi-tool, and the thing that picks the blade</h4>
+    <p>A Swiss Army knife has a blade, a screwdriver, scissors and a bottle opener, all built in permanently. You do
+    not add the scissors when you need them — they were always there. What you do is <em>select</em> one. An ALU is
+    exactly that: the adder, the AND unit, the OR unit and the XOR unit are all wired up and all computing their
+    answers simultaneously, every single cycle. A multiplexer then picks which answer is allowed out. Everything else
+    is thrown away. It sounds wasteful until you realise selecting is instant and deciding first would be slow.</p>
+  </div>
+
+  <div class="panel">
+    <div class="two">
+      <div>
+        <div style="margin-bottom:12px"><span class="mono" style="font-size:.8rem;color:var(--ink2)">Operand A</span>
+          <div class="bits" id="aluA" style="margin-top:6px"></div></div>
+        <div style="margin-bottom:12px"><span class="mono" style="font-size:.8rem;color:var(--ink2)">Operand B</span>
+          <div class="bits" id="aluB" style="margin-top:6px"></div></div>
+        <span class="mono" style="font-size:.8rem;color:var(--ink2)">Operation select (the MUX)</span>
+        <div class="tabs" id="aluOp" style="margin-top:6px"></div>
+      </div>
+      <div>
+        <span class="mono" style="font-size:.8rem;color:var(--ink2)">Result \u2192 accumulator</span>
+        <div class="bits" id="aluR" style="margin-top:6px"></div>
+        <div style="margin-top:16px"><span class="mono" style="font-size:.8rem;color:var(--ink2)">Flags (five flip-flops)</span>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px" id="aluF"></div></div>
+        <div class="feedback show good" id="aluMsg" style="margin-top:16px"></div>
+      </div>
+    </div>
+    <div style="margin-top:18px"><div class="zstage" style="margin:0"><div id="aluSvg"></div></div></div>
+  </div>
+
+  <div class="note win"><b>Flags are flip-flops, and that matters.</b> Each flag is a one-bit register holding a fact
+  about the <em>last</em> result: was it zero, was it negative, did it carry, did it overflow, was it even. They stay
+  set until the next operation overwrites them \u2014 which is exactly the memory behaviour from topic 4. And they are
+  how a program makes a decision: a conditional jump does nothing more than look at a flag and decide whether to
+  overwrite the program counter.</div>
+</div></section>
+
+<section id="modes"><div class="wrap">
+  <h2>Addressing modes</h2>
+  <p class="sub">An instruction has to say where its data is. There are several ways to say that, and each one trades
+  flexibility against speed. Same instruction, five different meanings.</p>
+
+  <div class="analogy">
+    <h4>Five ways to tell a friend where to meet you</h4>
+    <p>"<b>I'm right here</b>" — no travelling at all, the answer is in the message. "<b>Meet me at 12 Cayon Street</b>"
+    — a specific address, go straight there. "<b>Ask my mother where I am</b>" — you have to go one place to find out
+    the real place. "<b>Three doors down from where you are now</b>" — worked out from your current position.
+    "<b>Flat 5, in the building you already know</b>" — a base plus an offset. Every one of those gets your friend to
+    you. They cost different amounts of walking.</p>
+  </div>
+
+  <div class="panel">
+    <div class="tabs" id="amSel"></div>
+    <div class="two">
+      <div>
+        <div style="background:var(--ink);color:#fff;border-radius:10px;padding:14px 16px;font-family:'JetBrains Mono',monospace;font-size:1rem" id="amInstr"></div>
+        <div class="feedback show good" id="amMsg" style="margin-top:14px"></div>
+      </div>
+      <div>
+        <span class="mono" style="font-size:.8rem;color:var(--ink2)">Memory</span>
+        <div class="mem2" id="amMem" style="margin-top:8px"></div>
+      </div>
+    </div>
+    <div class="btnrow"><button class="clkbtn" id="amGo">Follow the trail</button>
+      <button class="btn ghost" id="amReset">Reset</button></div>
+  </div>
+
+  <div class="note warn"><b>How to tell immediate from direct in one second.</b> Immediate means the number in the
+  instruction <em>is</em> the data. Direct means the number in the instruction is an <em>address</em> where the data
+  lives. <span class="mono">LOAD #5</span> puts five in the accumulator; <span class="mono">LOAD 5</span> goes to
+  address five and brings back whatever is sitting there. The hash is doing a lot of work.</div>
+</div></section>
+
+<section id="cache"><div class="wrap">
+  <h2>Cache, and why it works at all</h2>
+  <p class="sub">Cache is a small pocket of very fast memory between the CPU and RAM. The interesting question is not
+  what it is — it is why keeping a tiny copy helps so much.</p>
+
+  <div class="analogy">
+    <h4>The cookie jar on the counter</h4>
+    <p>The cookies live in the pantry downstairs. Walking down takes a minute. So you bring a few up and keep them in
+    a jar on the counter. Now here is the bit that makes it work: people do not eat one cookie. They eat one, then
+    another, then another, from the same packet, within a few minutes. That habit is the whole reason the jar is worth
+    having. Programs behave identically \u2014 they use the same variable repeatedly, and they read arrays in order.
+    Cache is a bet on that habit, and it wins over ninety percent of the time.</p>
+  </div>
+
+  <div class="panel">
+    <p style="font-size:.93rem;color:var(--ink2)">Request some addresses and watch the hit rate. Try asking for the
+    same few over and over, then try jumping about randomly.</p>
+    <div class="two" style="margin-top:14px">
+      <div><span class="mono" style="font-size:.8rem;color:var(--ink2)">Cache (4 slots)</span>
+        <div class="mem2" id="cSlots" style="margin-top:8px"></div>
+        <div class="feedback show good" id="cMsg" style="margin-top:14px"></div></div>
+      <div><span class="mono" style="font-size:.8rem;color:var(--ink2)">Request an address</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px" id="cBtns"></div>
+        <div class="btnrow">
+          <button class="btn ghost" id="cLoop">Ask for 12, 13, 12, 13\u2026</button>
+          <button class="btn ghost" id="cRand">Ask randomly</button>
+          <button class="btn ghost" id="cReset">Empty the cache</button></div>
+        <div style="margin-top:16px;font-family:'JetBrains Mono',monospace;font-size:.9rem" id="cStats"></div></div>
+    </div>
+  </div>
+
+  <div class="note real"><b>Locality of reference \u2014 learn the phrase, it is the exam answer.</b> Programs reuse
+  the same data soon after using it (temporal locality) and use data stored nearby (spatial locality). Cache exploits
+  both. Without those two habits, cache would be useless and every computer you own would be roughly ten times slower.</div>
+</div></section>
+
+<section id="test"><div class="wrap">
+  <h2>Unit test</h2>
+  <p class="sub">Forty questions. Nothing is saved, nothing is sent, nobody sees your score but you. Every answer is
+  explained, and the breakdown at the end tells you which section to go back and play with.</p>
+
+  <div id="testIntro" class="panel">
+    <h3 style="margin-bottom:10px">What it covers</h3>
+    <ul style="color:var(--ink2);font-size:.96rem;margin:0;padding-left:20px">
+      <li><b>Part A</b> — the CPU and its four sections (8 questions)</li>
+      <li><b>Part B</b> — the ALU, flags and how it is built (8)</li>
+      <li><b>Part C</b> — registers and the fetch–decode–execute cycle (9)</li>
+      <li><b>Part D</b> — buses, clock and cache (8)</li>
+      <li><b>Part E</b> — addressing modes and instruction formats (7)</li>
+    </ul>
+    <div class="btnrow"><button class="btn accent" id="testStart">Start the test</button></div>
+  </div>
+
+  <div id="testRun" class="hide">
+    <div style="display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-bottom:18px">
+      <span class="mono" id="testPos"></span>
+      <div style="flex:1 1 180px;height:9px;background:var(--lowbg);border-radius:999px;overflow:hidden;min-width:140px">
+        <i id="testMeter" style="display:block;height:100%;background:var(--hot);width:0;transition:width .3s"></i></div>
+      <span class="mono" id="testScore"></span>
+    </div>
+    <div class="panel" id="qcard" style="margin-bottom:0"></div>
+    <div class="btnrow"><button class="btn ghost" id="testQuit">End test early</button></div>
+  </div>
+
+  <div id="testDone" class="hide">
+    <div class="panel" style="text-align:center;padding:34px 22px">
+      <div style="font-family:'Space Grotesk',sans-serif;font-size:4.2rem;font-weight:700;line-height:1" id="doneScore"></div>
+      <div class="mono" style="font-size:1.1rem;color:var(--ink2)" id="doneGrade"></div>
+      <p style="max-width:44ch;margin:18px auto 0;color:var(--ink2)" id="doneMsg"></p>
+      <div style="display:grid;gap:10px;max-width:480px;margin:26px auto 0;text-align:left" id="doneBreak"></div>
+      <div class="btnrow" style="justify-content:center">
+        <button class="btn accent" id="retryWrong">Retry only what I missed</button>
+        <button class="btn ghost" id="retryAll">Start over</button>
+        <button class="btn ghost" id="reviewAll">Review every question</button>
+      </div>
+    </div>
+    <div id="reviewBox"></div>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  Computer Science · Clarence Fitzroy Bryant College · CPU architecture.
+  Built for the classroom — nothing you do on this page is saved or sent anywhere.
+</div></footer>
+
+<script>
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ============================================================
+   LIVE DATAPATH — real geometry, real wires, a packet that moves
+   ============================================================ */
+const BUSY=310;                                   // y of the internal data bus
+const C={                                         // every component, with its centre and its bus port
+ MEM :{x:20, y:90, w:170,h:180,cx:105,cy:180,lbl:'MAIN MEMORY',dsc:'holds the program'},
+ MAR :{x:275,y:100,w:110,h:62, cx:330,cy:131,sx:420,lbl:'MAR',dsc:'which address'},
+ MDR :{x:275,y:178,w:110,h:62, cx:330,cy:209,sx:455,lbl:'MDR',dsc:'the data itself'},
+ IR  :{x:470,y:110,w:110,h:70, cx:525,cy:145,sx:525,lbl:'IR', dsc:'current instruction'},
+ PC  :{x:610,y:110,w:110,h:70, cx:665,cy:145,sx:665,lbl:'PC', dsc:'next address'},
+ ACC :{x:750,y:110,w:110,h:70, cx:805,cy:145,sx:805,lbl:'ACC',dsc:'working value'},
+ CU  :{x:300,y:350,w:180,h:80, cx:390,cy:390,sx:390,lbl:'CONTROL UNIT',dsc:'decodes & commands',below:1},
+ ALU :{x:540,y:350,w:160,h:80, cx:620,cy:390,sx:620,lbl:'ALU',dsc:'adder + logic + MUX',below:1},
+ FLG :{x:760,y:350,w:130,h:80, cx:825,cy:390,sx:825,lbl:'FLAGS',dsc:'5 flip-flops',below:1}
+};
+/* route a packet from one component to another along the real wires */
+function route(a,b){
+  const A=C[a],B=C[b];
+  if(a==='MEM') return b==='MDR'?[[190,209],[B.cx,209]]:[[190,131],[B.cx,131]];
+  if(b==='MEM') return a==='MAR'?[[190,131],[100,131],[A?100:100,180]]:[[190,209],[100,209],[100,180]];
+  const p=[];
+  if(a==='MAR'||a==='MDR') p.push([A.sx,A.cy],[A.sx,BUSY]); else p.push([A.sx,BUSY]);
+  if(b==='MAR'||b==='MDR') p.push([B.sx,BUSY],[B.sx,B.cy],[B.cx,B.cy]);
+  else p.push([B.sx,BUSY],[B.cx,B.cy]);
+  return p;
+}
+function dpSVG(){
+  const box=(k,v)=>{const o=C[k];
+    return `<g><rect id="bx_${k}" class="box" x="${o.x}" y="${o.y}" width="${o.w}" height="${o.h}" rx="10"/>
+      <text class="bl" x="${o.cx}" y="${o.y+22}" text-anchor="middle">${o.lbl}</text>
+      <text class="bd" x="${o.cx}" y="${o.y+36}" text-anchor="middle">${o.dsc}</text>
+      <text class="bv" id="tv_${k}" x="${o.cx}" y="${o.y+o.h-14}" text-anchor="middle"></text></g>`;};
+  let s='';
+  s+=`<rect class="cpuedge" x="250" y="60" width="670" height="400" rx="16"/>
+      <text x="262" y="82" font-family="JetBrains Mono, monospace" font-size="11" font-weight="700" fill="var(--hot)" opacity=".7">CPU</text>`;
+  s+=`<line class="buswire" id="ibus" x1="300" y1="${BUSY}" x2="895" y2="${BUSY}"/>
+      <text x="300" y="${BUSY-14}" font-family="JetBrains Mono, monospace" font-size="10" fill="var(--ink3)">INTERNAL DATA BUS</text>`;
+  s+=`<line class="buswire" id="abus" x1="100" y1="131" x2="275" y2="131"/>
+      <text x="196" y="122" font-family="JetBrains Mono, monospace" font-size="10" fill="var(--ink3)">ADDRESS BUS \u2192</text>`;
+  s+=`<line class="buswire" id="dbus" x1="100" y1="209" x2="275" y2="209"/>
+      <text x="196" y="230" font-family="JetBrains Mono, monospace" font-size="10" fill="var(--ink3)">\u2190 DATA BUS \u2192</text>`;
+  ['MAR','MDR'].forEach(k=>{const o=C[k];
+    s+=`<polyline class="stub" id="st_${k}" points="${o.x+o.w},${o.cy} ${o.sx},${o.cy} ${o.sx},${BUSY}" fill="none"/>`;});
+  ['IR','PC','ACC'].forEach(k=>{const o=C[k];
+    s+=`<line class="stub" id="st_${k}" x1="${o.sx}" y1="${o.y+o.h}" x2="${o.sx}" y2="${BUSY}"/>`;});
+  ['CU','ALU','FLG'].forEach(k=>{const o=C[k];
+    s+=`<line class="stub" id="st_${k}" x1="${o.sx}" y1="${o.y}" x2="${o.sx}" y2="${BUSY}"/>`;});
+  ['MAR','MDR','IR','PC','ACC','ALU','FLG'].forEach(k=>{const o=C[k];
+    s+=`<path class="ctrl" id="ct_${k}" d="M480,${380} Q${(480+o.cx)/2},${o.below?420:260} ${o.cx},${o.below?o.y+o.h:o.y}" fill="none"/>`;});
+  s+=Object.keys(C).map(k=>box(k)).join('');
+  s+=`<g id="memrows"></g>`;
+  s+=`<g id="pkt"><rect x="-28" y="-14" width="56" height="28" rx="7"/><text x="0" y="5">0</text></g>`;
+  return `<svg id="dp" viewBox="0 0 940 500" role="img" aria-label="Animated CPU datapath">${s}</svg>`;
+}
+$('#dpHost').innerHTML=dpSVG();
+
+const PROG=[
+ {a:0,txt:'LOAD #7', op:'LOAD', arg:7},
+ {a:1,txt:'ADD  #5', op:'ADD',  arg:5},
+ {a:2,txt:'STORE 9', op:'STORE',arg:9},
+ {a:3,txt:'SUB  #4', op:'SUB',  arg:4},
+ {a:4,txt:'HALT',    op:'HALT', arg:null}
+];
+let D={pc:0,mar:'',mdr:'',ir:'',acc:0,flg:{Z:0,N:0},step:0,halted:false,run:null,busy:false,
+       mem:PROG.concat([{a:5,txt:'\u2014'},{a:6,txt:'\u2014'},{a:7,txt:'\u2014'},{a:8,txt:'\u2014'},{a:9,txt:'\u2014'}])};
+const PHASES=['Fetch','Decode','Execute'];
+
+const STEPS=[
+ {ph:0,from:'PC',to:'MAR',wire:'ibus',val:d=>d.pc,
+  run:d=>{d.mar=d.pc;},
+  m:d=>`<b>Fetch 1 \u2014 PC to MAR.</b> The program counter is holding address <b>${d.pc}</b>. That number travels
+    across the internal data bus into the memory address register. The MAR's only job in life is to hold a
+    <em>where</em>. Notice the control unit lighting up the dashed lines \u2014 it is the CU that opened the gates to
+    let this transfer happen at all.`},
+ {ph:0,from:'MAR',to:'MEM',wire:'abus',val:d=>d.mar,
+  run:d=>{},
+  m:d=>`<b>Fetch 2 \u2014 MAR drives the address bus.</b> The address leaves the chip on the address bus, which is
+    <em>one-way only</em>. Memory decodes it \u2014 with the same kind of decoder you built in topic 3 \u2014 and
+    selects exactly one cell out of all of them. Address <b>${d.mar}</b> holds
+    <span class="mono">${esc(d.mem[d.mar].txt)}</span>.`},
+ {ph:0,from:'MEM',to:'MDR',wire:'dbus',val:d=>d.mem[d.mar].txt.split(' ')[0],
+  run:d=>{d.mdr=d.mem[d.mar].txt;},
+  m:d=>`<b>Fetch 3 \u2014 memory answers on the data bus.</b> The contents come back the other way and land in the MDR.
+    This is the bus that runs in <em>both</em> directions, because the CPU both reads and writes. The MDR is the only
+    register wired to the outside world \u2014 nothing enters or leaves the CPU without passing through it.`},
+ {ph:0,from:'MDR',to:'IR',wire:'ibus',val:d=>d.mdr.split(' ')[0],
+  run:d=>{d.ir=d.mdr;},
+  m:d=>`<b>Fetch 4 \u2014 MDR to IR.</b> The instruction moves into the instruction register, where it will sit still
+    for the rest of this cycle. It has to be parked somewhere stable, because the MDR is about to be needed again for
+    something else. The IR is a register in exactly the sense of topic 5: a row of D flip-flops holding a word.`},
+ {ph:0,from:'PC',to:'PC',wire:'ibus',val:d=>d.pc+1,
+  run:d=>{d.pc++;},
+  m:d=>`<b>Fetch 5 \u2014 increment the PC.</b> The program counter goes to <b>${d.pc}</b>, and it happens
+    <em>now</em>, during the fetch, before the current instruction has run. Inside the PC that increment is a counter
+    \u2014 the very circuit you built from T flip-flops in topic 4. This is also why a jump works: it simply overwrites
+    the PC with a different number.`},
+ {ph:1,from:'IR',to:'CU',wire:'ibus',val:d=>d.ir.split(' ')[0],
+  run:d=>{},
+  m:d=>{const i=P(d.ir);return `<b>Decode.</b> The control unit reads the bit pattern in the IR and splits it into
+    fields: an opcode (<b>${i.op}</b>) and an operand (<b>${i.arg===null?'none':i.arg}</b>). The circuit doing the
+    splitting is a decoder, exactly like the 2-to-4 decoder from topic 3 but with more outputs. Its job is to raise
+    one control line and leave the rest low \u2014 one instruction, one set of gates opened.`;}},
+ {ph:2,from:'CU',to:'ALU',wire:'ibus',val:d=>P(d.ir).op,
+  run:d=>{},
+  m:d=>{const i=P(d.ir);
+    if(i.op==='HALT') return `<b>Execute \u2014 HALT.</b> The control unit raises the halt line and the clock stops
+      driving the cycle. Without this instruction the PC would keep counting and the CPU would cheerfully execute
+      whatever bytes happened to be sitting after your program.`;
+    if(i.op==='STORE') return `<b>Execute \u2014 STORE, part one.</b> The CU tells the accumulator to put its value
+      (<b>${d.acc}</b>) onto the bus, and tells the MAR to take address <b>${i.arg}</b>. Writing to memory needs both
+      registers, just like reading did.`;
+    return `<b>Execute \u2014 the CU commands the ALU.</b> The control unit sets the ALU's operation-select lines to
+      <b>${i.op}</b>. Inside the ALU, the adder and the logic units are all computing their answers at once; those
+      select lines are the multiplexer choosing which answer is allowed out. Topic 3's MUX, doing its real job.`;}},
+ {ph:2,from:'ALU',to:'ACC',wire:'ibus',val:d=>{const i=P(d.ir);
+    return i.op==='LOAD'?i.arg:i.op==='ADD'?d.acc+i.arg:i.op==='SUB'?d.acc-i.arg:d.acc;},
+  run:d=>{const i=P(d.ir);
+    if(i.op==='LOAD') d.acc=i.arg;
+    else if(i.op==='ADD') d.acc+=i.arg;
+    else if(i.op==='SUB') d.acc-=i.arg;
+    else if(i.op==='STORE'){d.mem[i.arg]={a:i.arg,txt:'Data: '+d.acc};d.mar=i.arg;d.mdr='Data: '+d.acc;}
+    else if(i.op==='HALT') d.halted=true;
+    d.flg.Z=d.acc===0?1:0; d.flg.N=d.acc<0?1:0;},
+  m:d=>{const i=P(d.ir);
+    if(i.op==='ADD') return `<b>Execute \u2014 result into the accumulator.</b> The ALU's adder produced
+      <b>${d.acc}</b>. That addition happened in a ripple-carry adder built from full adders built from XOR, AND and OR
+      gates \u2014 the exact chain you built in topic 3. The flags updated too: Z=${d.flg.Z}, N=${d.flg.N}.`;
+    if(i.op==='SUB') return `<b>Execute \u2014 result into the accumulator.</b> Accumulator is now <b>${d.acc}</b>.
+      Subtraction uses the same adder: the second operand is inverted and one is added, so a single circuit does both
+      jobs. Flags: Z=${d.flg.Z}, N=${d.flg.N}.`;
+    if(i.op==='LOAD') return `<b>Execute \u2014 immediate load.</b> The operand <b>${i.arg}</b> was carried inside the
+      instruction itself, so no extra memory trip was needed. The accumulator now holds <b>${d.acc}</b>. That is
+      <em>immediate addressing</em>, which you will meet properly further down this page.`;
+    if(i.op==='STORE') return `<b>Execute \u2014 STORE, part two.</b> The data bus carries <b>${d.acc}</b> outward and
+      memory writes it into address <b>${i.arg}</b>. Look at the memory list \u2014 that cell has changed. This is the
+      only instruction in the program that writes anything back.`;
+    return `<b>Halted.</b> The program is finished. The accumulator ended on <b>${d.acc}</b> and address 9 holds what
+      STORE left there. Press Reset to run it again, or step through slowly and watch the bus each time.`;}}
+];
+function P(t){const m=String(t).match(/^(\w+)\s*#?(\d+)?/);return m?{op:m[1],arg:m[2]===undefined?null:+m[2]}:{op:'?',arg:null};}
+
+const pkt=()=>$('#pkt');
+function clearHi(){
+  $$('#dp .box').forEach(b=>b.classList.remove('src','dst','busy'));
+  $$('#dp .stub').forEach(b=>b.classList.remove('live'));
+  $$('#dp .buswire').forEach(b=>b.classList.remove('live'));
+  $$('#dp .ctrl').forEach(b=>b.classList.remove('live'));
+}
+function dpRender(){
+  const st=STEPS[D.step];
+  $('#dpPhase').innerHTML=PHASES.map((p,i)=>`<div class="ph ${st&&st.ph===i&&!D.halted?'on':''}">${p}</div>`).join('');
+  const vals={PC:D.pc,MAR:D.mar===''?'\u2014':D.mar,MDR:D.mdr||'\u2014',IR:D.ir||'\u2014',ACC:D.acc,
+              ALU:'',FLG:`Z${D.flg.Z} N${D.flg.N}`,CU:'',MEM:''};
+  Object.keys(C).forEach(k=>{const t=$('#tv_'+k); if(t) t.textContent=vals[k]===undefined?'':String(vals[k]).slice(0,10);});
+  $('#memrows').innerHTML=D.mem.map((m,i)=>
+    `<text class="memrow ${m.a===D.mar?'cur':''}" x="32" y="${118+i*17}">${String(m.a).padStart(2,'0')}  ${esc(m.txt)}</text>`).join('');
+  $('#dpMsg').className='feedback show '+(D.halted?'bad':'good');
+  $('#dpMsg').innerHTML=D.msg||'<b>Ready.</b> Press <b>Next transfer</b> to move one piece of data at a time, or <b>Run</b> to watch the whole program. Every movement you see is a real transfer on a real wire.';
+  $('#dpStep').disabled=D.halted||D.busy;
+}
+function movePkt(points,label,done){
+  const g=pkt(); g.querySelector('text').textContent=String(label).slice(0,7);
+  let i=0;
+  const hop=()=>{
+    if(i>=points.length){ setTimeout(()=>{g.classList.remove('on');done&&done();},260); return; }
+    const [x,y]=points[i++];
+    g.style.transform=`translate(${x}px,${y}px)`;
+    setTimeout(hop, i===1?60:460);
+  };
+  const [sx,sy]=points[0];
+  g.style.transition='none'; g.style.transform=`translate(${sx}px,${sy}px)`;
+  requestAnimationFrame(()=>{g.style.transition=''; g.classList.add('on'); hop();});
+}
+function dpStep(){
+  if(D.halted||D.busy) return;
+  const st=STEPS[D.step];
+  D.busy=true; clearHi();
+  const A=C[st.from],B=C[st.to];
+  $('#bx_'+st.from)?.classList.add('src');
+  $('#bx_'+st.to)?.classList.add('dst');
+  $('#bx_CU')?.classList.add('busy');
+  $('#'+st.wire)?.classList.add('live');
+  ['st_'+st.from,'st_'+st.to].forEach(id=>$('#'+id)?.classList.add('live'));
+  ['ct_'+st.from,'ct_'+st.to].forEach(id=>$('#'+id)?.classList.add('live'));
+  const pts=[[A.cx,A.cy]].concat(route(st.from,st.to));
+  movePkt(pts,st.val(D),()=>{
+    st.run(D); D.msg=st.m(D);
+    D.step=(D.step+1)%STEPS.length;
+    D.busy=false; dpRender();
+    if(D.halted){clearInterval(D.run);D.run=null;clearHi();}
+  });
+}
+function dpReset(){
+  clearInterval(D.run);
+  D={pc:0,mar:'',mdr:'',ir:'',acc:0,flg:{Z:0,N:0},step:0,halted:false,run:null,busy:false,msg:'',
+     mem:PROG.map(p=>({...p})).concat([{a:5,txt:'\u2014'},{a:6,txt:'\u2014'},{a:7,txt:'\u2014'},{a:8,txt:'\u2014'},{a:9,txt:'\u2014'}])};
+  clearHi(); pkt().classList.remove('on'); dpRender();
+}
+$('#dpStep').addEventListener('click',dpStep);
+$('#dpReset').addEventListener('click',dpReset);
+$('#dpPause').addEventListener('click',()=>{clearInterval(D.run);D.run=null;});
+$('#dpRun').addEventListener('click',()=>{clearInterval(D.run);
+  const sp=[0,3200,2600,2100,1650,1250][+$('#dpSpeed').value];
+  D.run=setInterval(()=>{if(!D.busy)dpStep();},sp); dpStep();});
+dpReset();
+
+/* ================= ZOOM THROUGH SIX LEVELS ================= */
+const G=(x,y,w,h,f,s)=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="8" fill="${f||'var(--board)'}" stroke="${s||'var(--line)'}" stroke-width="2.5"/>`;
+const TX=(x,y,t,sz,c,w)=>`<text x="${x}" y="${y}" text-anchor="middle" font-family="${w==='m'?'JetBrains Mono, monospace':'Space Grotesk, sans-serif'}" font-size="${sz||12}" font-weight="700" fill="${c||'var(--ink)'}">${esc(t)}</text>`;
+const LN=(x1,y1,x2,y2,c,w)=>`<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${c||'var(--line)'}" stroke-width="${w||2.5}" stroke-linecap="round"/>`;
+const ZOOM=[
+ {n:'LEVEL 1',t:'The whole computer',from:'Topic 1 \u2014 storage hierarchy',
+  d:'A processor, some memory, and things to talk to. Everything else is detail.',
+  msg:'At this zoom a computer is three boxes and some wires. The CPU does the work, memory holds the program and the data, and input/output connects to the world. You met this arrangement in topic 1 when you learned why registers are fast and disks are slow \u2014 it is the same picture, drawn from further away.',
+  svg:()=>`<svg viewBox="0 0 520 190">
+    ${G(30,40,140,110,'rgba(59,76,168,.1)','var(--hot)')}${TX(100,78,'CPU',18,'var(--hot)')}${TX(100,100,'does the work',10,'var(--ink2)')}
+    ${G(210,40,140,110)}${TX(280,78,'MEMORY',15)}${TX(280,100,'holds program + data',9,'var(--ink2)')}
+    ${G(390,40,100,110)}${TX(440,78,'I/O',15)}${TX(440,100,'the world',9,'var(--ink2)')}
+    ${LN(170,80,210,80,'var(--amber)',6)}${TX(190,68,'addr',8,'var(--ink3)','m')}
+    ${LN(170,115,210,115,'var(--amber)',6)}${TX(190,132,'data',8,'var(--ink3)','m')}
+    ${LN(350,95,390,95,'var(--amber)',6)}
+    ${TX(260,175,'zoom into the CPU \u2193',10,'var(--ink3)')}</svg>`},
+ {n:'LEVEL 2',t:'Inside the CPU',from:'Topics 4 & 5 \u2014 flip-flops and registers',
+  d:'Control unit, ALU, a handful of registers, a clock, and a bus joining them.',
+  msg:'Four sections and a bus. Every register in here \u2014 PC, MAR, MDR, IR, ACC \u2014 is a row of D flip-flops exactly like the register you wired up in topic 5. The clock is the whistle from topic 4. Nothing here is a new kind of object.',
+  svg:()=>`<svg viewBox="0 0 520 230">
+    ${G(20,20,480,190,'none','var(--hot)')}${TX(60,40,'CPU',11,'var(--hot)','m')}
+    ${G(45,55,110,52)}${TX(100,78,'CONTROL',12)}${TX(100,94,'decodes',9,'var(--ink2)')}
+    ${G(180,55,110,52,'rgba(224,75,47,.1)','var(--red)')}${TX(235,78,'ALU',13,'var(--red)')}${TX(235,94,'calculates',9,'var(--ink2)')}
+    ${G(320,55,150,52,'rgba(194,118,42,.1)','var(--ochre)')}${TX(395,74,'REGISTERS',12,'var(--ochre)')}${TX(395,92,'PC MAR MDR IR ACC',8,'var(--ink2)','m')}
+    ${LN(45,140,470,140,'var(--amber)',6)}${TX(150,132,'INTERNAL BUS',8,'var(--ink3)','m')}
+    ${LN(100,107,100,140)}${LN(235,107,235,140)}${LN(395,107,395,140)}
+    ${G(200,160,120,38,'rgba(14,124,155,.1)','var(--cyan)')}${TX(260,184,'CLOCK',12,'var(--cyan)')}
+    ${TX(260,222,'zoom into the ALU \u2193',10,'var(--ink3)')}</svg>`},
+ {n:'LEVEL 3',t:'Inside the ALU',from:'Topic 3 \u2014 multiplexers',
+  d:'An adder, some logic units, a multiplexer choosing between them, and flag flip-flops.',
+  msg:'Here is the surprise: every unit computes at the same time, every cycle. The adder adds, the AND unit ANDs, the XOR unit XORs \u2014 all of them, always. The multiplexer then picks one answer and discards the rest. That MUX is the component you built in topic 3, and the operation-select lines from the control unit are its select inputs.',
+  svg:()=>`<svg viewBox="0 0 520 230">
+    ${LN(20,45,90,45,'var(--amber)',5)}${TX(50,36,'A',10,'var(--ink2)','m')}
+    ${LN(20,175,90,175,'var(--amber)',5)}${TX(50,196,'B',10,'var(--ink2)','m')}
+    ${G(95,25,120,40,'rgba(90,75,156,.12)','var(--violet)')}${TX(155,50,'ADDER',12,'var(--violet)')}
+    ${G(95,75,120,40)}${TX(155,100,'AND unit',11)}
+    ${G(95,125,120,40)}${TX(155,150,'OR unit',11)}
+    ${G(95,175,120,40)}${TX(155,200,'XOR unit',11)}
+    ${G(265,25,70,190,'rgba(242,169,59,.16)','var(--amber)')}${TX(300,110,'MUX',14,'#8A5B08')}${TX(300,130,'picks one',9,'#8A5B08')}
+    ${[45,95,145,195].map(y=>LN(215,y,265,y)).join('')}
+    ${LN(300,215,300,235)}
+    ${LN(335,120,400,120,'var(--amber)',5)}
+    ${G(400,95,100,50,'rgba(194,118,42,.1)','var(--ochre)')}${TX(450,118,'RESULT',11,'var(--ochre)')}${TX(450,134,'\u2192 accumulator',8,'var(--ink2)')}
+    ${G(400,25,100,45,'rgba(224,75,47,.1)','var(--red)')}${TX(450,45,'FLAGS',11,'var(--red)')}${TX(450,60,'5 flip-flops',8,'var(--ink2)')}
+    ${LN(370,120,370,48)}${LN(370,48,400,48)}
+    ${TX(300,226,'op select from CU',8,'var(--ink3)','m')}</svg>`},
+ {n:'LEVEL 4',t:'Inside the adder',from:'Topic 3 \u2014 ripple-carry adder',
+  d:'Four full adders in a chain, each passing its carry to the next.',
+  msg:'You built this one yourself, wire for wire. Four full adders, each handling one bit column, each waiting on the carry from the one to its right. The bucket brigade. And you already know its weakness \u2014 the carry has to ripple along, so a wide adder is a slow adder unless you spend gates on lookahead.',
+  svg:()=>`<svg viewBox="0 0 520 170">
+    ${[0,1,2,3].map(i=>{const x=380-i*110;return G(x,50,90,60,'rgba(90,75,156,.1)','var(--violet)')+
+      TX(x+45,78,'FULL',11,'var(--violet)')+TX(x+45,94,'ADDER '+i,10,'var(--violet)')+
+      LN(x+20,50,x+20,25,'var(--amber)',3)+LN(x+68,50,x+68,25,'var(--amber)',3)+
+      TX(x+20,18,'A'+i,9,'var(--ink2)','m')+TX(x+68,18,'B'+i,9,'var(--ink2)','m')+
+      LN(x+45,110,x+45,138,'var(--ochre)',3)+TX(x+45,152,'S'+i,9,'var(--ink2)','m');}).join('')}
+    ${[0,1,2].map(i=>{const x=380-i*110;return LN(x,80,x-20,80,'var(--red)',3);}).join('')}
+    ${TX(455,80,'carry \u2192',9,'var(--red)','m')}${LN(470,80,500,80,'var(--red)',3)}
+    ${TX(45,80,'\u2190 Cin',9,'var(--red)','m')}</svg>`},
+ {n:'LEVEL 5',t:'Inside a full adder',from:'Topic 2 \u2014 logic gates',
+  d:'Two XORs, two ANDs and an OR. That is the whole thing.',
+  msg:'Five gates. That is what an adder column actually is. Two XOR gates produce the sum, two AND gates detect the two ways a carry can happen, and an OR gate combines them. You drew this in topic 2 using nothing but a truth table and the sum-of-products drill.',
+  svg:()=>`<svg viewBox="0 0 520 200">
+    ${G(90,25,90,45,'rgba(90,75,156,.15)','var(--violet)')}${TX(135,53,'XOR',12,'var(--violet)')}
+    ${G(230,55,90,45,'rgba(90,75,156,.15)','var(--violet)')}${TX(275,83,'XOR',12,'var(--violet)')}
+    ${G(90,105,90,40,'rgba(224,75,47,.15)','var(--red)')}${TX(135,131,'AND',12,'var(--red)')}
+    ${G(230,115,90,40,'rgba(224,75,47,.15)','var(--red)')}${TX(275,141,'AND',12,'var(--red)')}
+    ${G(370,105,90,45,'rgba(242,169,59,.2)','#8A5B08')}${TX(415,133,'OR',12,'#8A5B08')}
+    ${LN(25,38,90,38,'var(--amber)',3)}${TX(15,42,'A',10,'var(--ink2)','m')}
+    ${LN(25,58,90,58,'var(--amber)',3)}${TX(15,62,'B',10,'var(--ink2)','m')}
+    ${LN(25,170,230,170,'var(--amber)',3)}${TX(15,174,'Cin',10,'var(--ink2)','m')}
+    ${LN(180,48,230,68)}${LN(180,125,230,127)}${LN(180,170,180,125)}
+    ${LN(320,78,470,78,'var(--ochre)',3)}${TX(490,82,'SUM',10,'var(--ink)','m')}
+    ${LN(320,135,370,125)}${LN(180,125,370,140)}
+    ${LN(460,128,490,128,'var(--red)',3)}${TX(500,150,'Cout',10,'var(--ink)','m')}</svg>`},
+ {n:'LEVEL 6',t:'Inside a gate',from:'beyond the syllabus \u2014 but worth seeing',
+  d:'Transistors. Tiny switches, electrically operated, and there is nothing below this.',
+  msg:'A gate is a few transistors, and a transistor is a switch with no moving parts \u2014 a small voltage on one leg decides whether current flows between the other two. A modern processor has tens of billions of them. You are not examined on this level, but it is worth seeing the floor of the building: it really is switches all the way down, and there is no hidden magic layer underneath.',
+  svg:()=>`<svg viewBox="0 0 520 190">
+    ${LN(120,30,120,70,'var(--red)',3)}${TX(120,22,'+V',10,'var(--red)','m')}
+    ${G(90,70,60,40,'rgba(224,75,47,.1)','var(--red)')}${TX(120,95,'T1',11,'var(--red)')}
+    ${G(90,120,60,40,'rgba(14,124,155,.1)','var(--cyan)')}${TX(120,145,'T2',11,'var(--cyan)')}
+    ${LN(120,160,120,180,'var(--ink2)',3)}${TX(120,190,'0V',10,'var(--ink2)','m')}
+    ${LN(40,115,90,115,'var(--amber)',3)}${TX(28,119,'in',10,'var(--ink2)','m')}
+    ${LN(150,115,230,115,'var(--ochre)',3)}${TX(252,119,'out',10,'var(--ink)','m')}
+    ${TX(370,70,'This is a NOT gate.',13)}
+    ${TX(370,95,'Two transistors. In high \u2192 out low.',10,'var(--ink2)')}
+    ${TX(370,115,'In low \u2192 out high. That is all.',10,'var(--ink2)')}
+    ${TX(370,145,'A CPU has ~50,000,000,000 of these.',10,'var(--ink3)')}</svg>`}
+];
+let zI=0;
+function zDraw(){
+  $('#zoomList').innerHTML=ZOOM.map((z,i)=>
+    `<button class="zl" data-i="${i}" aria-pressed="${i===zI}">
+      <div class="zt"><span class="zn">${z.n}</span><h4>${esc(z.t)}</h4></div>
+      <p>${esc(z.d)}</p><span class="from">${esc(z.from)}</span></button>`).join('');
+  $('#zoomStage').innerHTML=ZOOM[zI].svg();
+  $('#zoomMsg').innerHTML=`<b>${esc(ZOOM[zI].t)}.</b> ${ZOOM[zI].msg}`;
+}
+$('#zoomList').addEventListener('click',e=>{const b=e.target.closest('.zl');if(b){zI=+b.dataset.i;zDraw();}});
+zDraw();
+
+/* ================= THE FOUR PARTS ================= */
+const PARTSX=[
+ {k:'ALU',t:'Arithmetic Logic Unit',c:'var(--red)',
+  d:'Does the actual computing. Adds, subtracts, compares, and performs AND, OR, NOT and XOR on whole words at once.',
+  has:['Adder (your ripple-carry from topic 3)','Logic units for AND, OR, XOR','A multiplexer to select the operation','Five flag flip-flops','A temporary register for the second operand'],
+  not:'It does not decide what to do \u2014 it is told. It has no idea what instruction is running.'},
+ {k:'CU',t:'Control Unit',c:'var(--hot)',
+  d:'Reads the instruction in the IR, works out what it means, and raises the control lines that open the right paths at the right moment.',
+  has:['An instruction decoder (a decoder, topic 3)','Control signal generators','RD and WR lines to memory','Connections to every other part'],
+  not:'It performs no arithmetic whatsoever. If an exam answer says the CU calculates anything, it is wrong.'},
+ {k:'REG',t:'Register Section',c:'var(--ochre)',
+  d:'The CPU\u2019s working surface. Small, extremely fast storage sitting right inside the chip.',
+  has:['Program Counter \u2014 address of the next instruction','MAR \u2014 which address','MDR / MBR \u2014 the data itself','Instruction Register \u2014 what is running now','Accumulator \u2014 where results land','Stack Pointer \u2014 top of the stack','General purpose registers'],
+  not:'These are not cache and not RAM. They are individual named registers, each built from D flip-flops.'},
+ {k:'BUS',t:'Bus System',c:'var(--amber)',
+  d:'Shared bundles of wire connecting everything. Internal buses join components on the chip; external buses reach memory and devices.',
+  has:['Address bus \u2014 one way, carries WHERE','Data bus \u2014 two ways, carries WHAT','Control bus \u2014 carries WHEN and WHICH WAY'],
+  not:'A bus stores nothing. It is a road, not a warehouse \u2014 data is only on it for an instant.'}
+];
+let pI=0;
+function pDraw(){
+  $('#partSel').innerHTML=PARTSX.map((p,i)=>
+    `<button class="tab" data-i="${i}" aria-pressed="${i===pI}">${esc(p.t)}</button>`).join('');
+  const p=PARTSX[pI];
+  $('#partBody').innerHTML=`
+    <h3 style="color:${p.c};margin-bottom:6px">${esc(p.t)}</h3>
+    <p style="color:var(--ink2);font-size:.97rem">${esc(p.d)}</p>
+    <h4 style="margin:14px 0 8px;font-size:.95rem">What is inside it</h4>
+    <ul style="margin:0;padding-left:20px;color:var(--ink2);font-size:.94rem">${p.has.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>
+    <div class="note warn" style="margin-bottom:0"><b>What it does NOT do.</b> ${esc(p.not)}</div>`;
+}
+$('#partSel').addEventListener('click',e=>{const b=e.target.closest('.tab');if(b){pI=+b.dataset.i;pDraw();}});
+pDraw();
+
+/* ================= ADDRESS BUS WIDTH ================= */
+function abDraw(){
+  const n=+$('#abW').value, cells=Math.pow(2,n);
+  const bytes=cells, human = bytes>=1e12?(bytes/1099511627776).toFixed(1)+' TB'
+    : bytes>=1e9?(bytes/1073741824).toFixed(1)+' GB'
+    : bytes>=1e6?(bytes/1048576).toFixed(1)+' MB'
+    : bytes>=1024?(bytes/1024).toFixed(1)+' KB' : bytes+' bytes';
+  $('#abLbl').textContent=n+' wires';
+  const famous={8:'the original 8-bit micros could see 256 bytes of address space per page',16:'a 16-bit address bus is what the 1980s home computers used \u2014 64 KB total',20:'the original IBM PC used 20 wires, which is where the famous 1 MB limit came from',32:'32-bit machines stop here. This is the real reason old Windows PCs could not use more than 4 GB of RAM',40:'well beyond anything you can buy'};
+  $('#abOut').innerHTML=`<b>${n} address wires \u2192 2<sup>${n}</sup> = ${cells.toLocaleString()} addressable locations \u2248 ${human}.</b>
+    ${famous[n]?`<br><span style="color:var(--ink2)">${famous[n]}.</span>`:''}
+    <br><span style="color:var(--ink3);font-size:.88rem">The formula is just 2\u207f, the same one you used for truth table rows and multiplexer inputs. Add one wire and you double the memory the CPU can reach.</span>`;
+}
+$('#abW').addEventListener('input',abDraw); abDraw();
+
+/* ================= ALU BENCH ================= */
+const OPS=[{k:'ADD',s:'A + B'},{k:'SUB',s:'A \u2212 B'},{k:'AND',s:'A \u00b7 B'},{k:'OR',s:'A + B (logical)'},{k:'XOR',s:'A \u2295 B'}];
+let aA=[0,1,1,0], aB=[0,0,1,1], aOp=0;
+const d4=a=>a.reduce((n,x)=>n*2+x,0);
+function aluCalc(){
+  const A=d4(aA), B=d4(aB); let r,c=0,v=0;
+  const op=OPS[aOp].k;
+  if(op==='ADD'){r=A+B; c=r>15?1:0; r&=15;}
+  else if(op==='SUB'){r=A-B; c=A<B?1:0; v=A<B?1:0; r=((r%16)+16)%16;}
+  else if(op==='AND') r=A&B;
+  else if(op==='OR')  r=A|B;
+  else r=A^B;
+  const bits=[3,2,1,0].map(i=>(r>>i)&1);
+  const par=bits.filter(x=>x).length%2;
+  return {A,B,r,bits,flags:{Z:r===0?1:0,N:bits[0],C:c,V:v,P:par},op};
+}
+function aluDraw(){
+  const o=aluCalc();
+  const row=(arr,id,ro)=>arr.map((v,i)=>
+    `<button class="bit ${ro?'ro':''}" ${ro?'':`data-${id}="${i}"`} aria-pressed="${!!v}">${v}</button>`).join('');
+  $('#aluA').innerHTML=row(aA,'a');
+  $('#aluB').innerHTML=row(aB,'b');
+  $('#aluR').innerHTML=row(o.bits,'r',true);
+  $('#aluOp').innerHTML=OPS.map((x,i)=>`<button class="tab" data-op="${i}" aria-pressed="${i===aOp}">${esc(x.k)}</button>`).join('');
+  const FN={Z:'Zero',N:'Negative',C:'Carry',V:'Overflow',P:'Parity'};
+  $('#aluF').innerHTML=Object.keys(o.flags).map(k=>
+    `<span class="flag ${o.flags[k]?'on':''}">${k} = ${o.flags[k]} <span style="font-size:.7rem;opacity:.75">${FN[k]}</span></span>`).join('');
+  const note=o.op==='ADD'&&o.flags.C?' The carry flag is set because the answer would not fit in four bits \u2014 the true answer is '+(o.A+o.B)+'.'
+    :o.flags.Z?' The zero flag is set, and that is exactly what a conditional jump would test.' : '';
+  $('#aluMsg').innerHTML=`<b>${o.A} ${esc(OPS[aOp].s.replace('A',''+o.A).replace('B',''+o.B))} = ${o.r}</b>
+    &nbsp;<span class="mono" style="color:var(--ink2)">${aA.join('')} ${esc(OPS[aOp].k)} ${aB.join('')} = ${o.bits.join('')}</span>${note}`;
+  $('#aluSvg').innerHTML=`<svg viewBox="0 0 520 200">
+    ${LN(20,50,110,50,'var(--amber)',4)}${TX(40,42,'A='+aA.join(''),9,'var(--ink2)','m')}
+    ${LN(20,150,110,150,'var(--amber)',4)}${TX(40,168,'B='+aB.join(''),9,'var(--ink2)','m')}
+    ${OPS.map((x,i)=>{const y=25+i*35;return G(110,y,110,28,i===aOp?'rgba(59,76,168,.16)':'var(--board)',i===aOp?'var(--hot)':'var(--line)')
+      +TX(165,y+19,x.k,11,i===aOp?'var(--hot)':'var(--ink3)')+LN(220,y+14,270,y+14,i===aOp?'var(--amber)':'var(--line)',i===aOp?4:2);}).join('')}
+    ${G(270,25,60,175,'rgba(242,169,59,.18)','var(--amber)')}${TX(300,105,'MUX',13,'#8A5B08')}${TX(300,122,'select',8,'#8A5B08')}
+    ${LN(330,112,390,112,'var(--amber)',4)}
+    ${G(390,88,110,48,'rgba(194,118,42,.12)','var(--ochre)')}${TX(445,110,'RESULT',11,'var(--ochre)')}${TX(445,127,d4(o.bits)+' = '+o.bits.join(''),9,'var(--ink2)','m')}
+    ${G(390,20,110,42,'rgba(224,75,47,.1)','var(--red)')}${TX(445,38,'FLAGS',10,'var(--red)')}
+    ${TX(445,54,Object.keys(o.flags).map(k=>k+o.flags[k]).join(' '),8,'var(--ink2)','m')}
+    ${LN(360,112,360,41)}${LN(360,41,390,41)}
+    ${TX(300,196,'op select from the control unit',8,'var(--ink3)','m')}</svg>`;
+}
+$('#aluA').addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(b){aA[+b.dataset.a]^=1;aluDraw();}});
+$('#aluB').addEventListener('click',e=>{const b=e.target.closest('[data-b]');if(b){aB[+b.dataset.b]^=1;aluDraw();}});
+$('#aluOp').addEventListener('click',e=>{const b=e.target.closest('[data-op]');if(b){aOp=+b.dataset.op;aluDraw();}});
+aluDraw();
+
+/* ================= ADDRESSING MODES ================= */
+const AMEM=[{a:20,v:'35'},{a:21,v:'8'},{a:22,v:'40'},{a:23,v:'99'},{a:40,v:'77'},{a:41,v:'12'}];
+const AM=[
+ {k:'Immediate',i:'LOAD #35',trail:[],res:'35',
+  m:'The hash means "this IS the data". No memory trip at all \u2014 the number 35 was carried inside the instruction itself. Fastest possible mode, but the value is fixed when the program is written and can never change.'},
+ {k:'Direct',i:'LOAD 20',trail:[20],res:'35',
+  m:'No hash, so 20 is an <em>address</em>. Go to memory location 20 and bring back whatever is there \u2014 which is 35. One memory trip. Simple and common, but the address is fixed in the instruction.'},
+ {k:'Indirect',i:'LOAD (22)',trail:[22,40],res:'77',
+  m:'Two trips. Go to location 22 and find <b>40</b> \u2014 but that is not the data, it is another address. So go to location 40 and bring back <b>77</b>. Slower, but the program can change what is in location 22 while running, so the same instruction can reach different data each time. This is how pointers work.'},
+ {k:'Indexed',i:'LOAD 20(X), X=3',trail:[23],res:'99',
+  m:'Take the base address 20, add the index register X which holds 3, and go to location 23. Increment X and the same instruction reads the next element. This is how a program walks through an array \u2014 one instruction in a loop, a different element each time.'},
+ {k:'Relative',i:'LOAD *+2, PC=18',trail:[20],res:'35',
+  m:'The address is worked out from where the program counter currently is: 18 + 2 = 20. Because it is relative, the whole program can be loaded anywhere in memory and still work. That property is called position independence and it is why modern operating systems can load programs wherever there is room.'}
+];
+let amI=0, amStep=-1;
+function amDraw(){
+  $('#amSel').innerHTML=AM.map((m,i)=>`<button class="tab" data-i="${i}" aria-pressed="${i===amI}">${esc(m.k)}</button>`).join('');
+  const m=AM[amI];
+  $('#amInstr').innerHTML=esc(m.i)+(amStep>=m.trail.length?`<br><span style="color:var(--amber)">\u2192 accumulator gets ${esc(m.res)}</span>`:'');
+  $('#amMem').innerHTML=AMEM.map(c=>{
+    const idx=m.trail.indexOf(c.a);
+    const looked=idx>=0&&idx<amStep, looking=idx>=0&&idx===amStep;
+    return `<div class="r ${looking?'look':''} ${looked?'hit':''}"><span>addr ${c.a}</span><span>${esc(c.v)}</span></div>`;}).join('');
+  $('#amMsg').innerHTML=amStep<0?`<b>${esc(m.k)} addressing.</b> Press <b>Follow the trail</b> and watch how many memory trips this mode costs.`
+    :`<b>${esc(m.k)} addressing \u2014 ${m.trail.length} memory ${m.trail.length===1?'trip':'trips'}.</b> ${m.m}`;
+}
+$('#amSel').addEventListener('click',e=>{const b=e.target.closest('.tab');if(b){amI=+b.dataset.i;amStep=-1;amDraw();}});
+$('#amReset').addEventListener('click',()=>{amStep=-1;amDraw();});
+$('#amGo').addEventListener('click',()=>{
+  const m=AM[amI]; amStep=0; amDraw();
+  let k=0; const t=setInterval(()=>{amStep=++k;amDraw();if(k>m.trail.length)clearInterval(t);},750);
+});
+amDraw();
+
+/* ================= CACHE SIMULATOR ================= */
+const ADDRS=[10,11,12,13,14,15,16,17];
+let cache=[], cHit=0, cMiss=0, cLog='';
+function cDraw(){
+  $('#cSlots').innerHTML=[0,1,2,3].map(i=>{
+    const e=cache[i];
+    return `<div class="r ${e&&e.just?'hit':''}"><span>slot ${i}</span><span>${e?'addr '+e.a:'empty'}</span></div>`;}).join('');
+  $('#cBtns').innerHTML=ADDRS.map(a=>`<button class="btn ghost" data-a="${a}" style="padding:7px 13px;font-size:.85rem">${a}</button>`).join('');
+  const tot=cHit+cMiss, rate=tot?Math.round(cHit/tot*100):0;
+  $('#cStats').innerHTML=`hits <b style="color:var(--mint)">${cHit}</b> &nbsp; misses <b style="color:var(--red)">${cMiss}</b>
+    &nbsp; hit rate <b>${rate}%</b>`;
+  $('#cMsg').className='feedback show '+(cLog.includes('MISS')?'bad':'good');
+  $('#cMsg').innerHTML=cLog||'<b>Cache is empty.</b> Every first request has to miss \u2014 that is unavoidable and it is called a cold miss. What matters is what happens on the second request.';
+}
+function cReq(a){
+  cache.forEach(e=>e.just=false);
+  const hit=cache.find(e=>e.a===a);
+  if(hit){cHit++;hit.just=true;hit.t=Date.now();
+    cLog=`<b>HIT on address ${a}.</b> It was already in the cache, so the CPU got it in a couple of cycles instead of a hundred. This is temporal locality paying off \u2014 you asked for something you had asked for recently.`;}
+  else{cMiss++;
+    if(cache.length>=4){cache.sort((x,y)=>x.t-y.t);cache.shift();}
+    cache.push({a,t:Date.now(),just:true});
+    cLog=`<b>MISS on address ${a}.</b> Not in cache, so the CPU had to wait for main memory \u2014 far slower. The value has now been copied into a slot, and if the oldest entry had to be evicted to make room, that is the replacement policy doing its job.`;}
+  cDraw();
+}
+$('#cBtns').addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(b)cReq(+b.dataset.a);});
+$('#cLoop').addEventListener('click',()=>{let k=0;const seq=[12,13,12,13,12,13];
+  const t=setInterval(()=>{cReq(seq[k]);if(++k>=seq.length){clearInterval(t);
+    cLog=`<b>Look at the hit rate.</b> After the first two cold misses, every single request hit. Real programs behave exactly like this \u2014 loops touch the same few variables over and over, which is the entire reason cache works.`;cDraw();}},420);});
+$('#cRand').addEventListener('click',()=>{let k=0;
+  const t=setInterval(()=>{cReq(ADDRS[Math.floor(Math.random()*ADDRS.length)]);if(++k>=8){clearInterval(t);
+    cLog=`<b>Random access is cache's worst enemy.</b> With eight addresses and four slots, jumping about at random means constant evictions and a poor hit rate. Programs that skip unpredictably through memory really do run slower, and this is why.`;cDraw();}},420);});
+$('#cReset').addEventListener('click',()=>{cache=[];cHit=0;cMiss=0;cLog='';cDraw();});
+cDraw();
+
+/* ================= UNIT TEST ================= */
+const PARTS={A:'The CPU and its sections',B:'The ALU and flags',C:'Registers and the cycle',D:'Buses, clock and cache',E:'Addressing and instructions'};
+const Q=[
+{p:'A',q:'The CPU and the microprocessor (MPU) are:',opts:['Completely different components','The same thing under two names','The CPU contains several MPUs','The MPU replaced the CPU'],a:1,
+ why:'They are synonyms. "Microprocessor" emphasises that the whole CPU fits on one chip, which has been true since the 1970s.'},
+{p:'A',q:'Which section of the CPU decodes instructions and generates control signals?',opts:['ALU','Control Unit','Register section','Bus system'],a:1,
+ why:'The CU is the head chef \u2014 it reads the ticket and shouts orders, but never cooks. If an answer has the control unit doing arithmetic, it is wrong.'},
+{p:'A',q:'Which section actually performs calculations?',opts:['Control Unit','ALU','Program Counter','Address bus'],a:1,
+ why:'The arithmetic logic unit. It adds, subtracts, compares and performs bitwise AND, OR and XOR \u2014 but only when the control unit tells it which.'},
+{p:'A',q:'What are the four main sections of a CPU?',opts:['ALU, cache, disk, bus','ALU, control unit, registers, bus system','Memory, disk, ALU, clock','Input, output, memory, ALU'],a:1,
+ why:'Every processor block diagram splits these four ways. Learn them and any exam diagram becomes readable.'},
+{p:'A',q:'Which of these is NOT a function of the CPU?',opts:['Providing timing signals','Directing data flow','Permanently storing files','Communicating with peripheral devices'],a:2,
+ why:'Permanent storage is the job of secondary storage \u2014 disks and SSDs. Everything in the CPU is volatile and vanishes when power goes.'},
+{p:'A',q:'A processor is fundamentally built from:',opts:['A new kind of component not covered in this course','Logic gates, flip-flops and registers arranged at scale','Software instructions burned into silicon','Magnetic storage cells'],a:1,
+ why:'There is no layer where new physics appears. Gates make adders, adders and multiplexers make the ALU, flip-flops make registers, and the arrangement makes a processor.'},
+{p:'A',q:'The instruction decoder inside the control unit is built from which component you have already studied?',opts:['An adder','A decoder','A shift register','A flip-flop'],a:1,
+ why:'Same component as the 2-to-4 decoder from combinational circuits, just wider. One input pattern raises exactly one output line, which opens exactly one set of control paths.'},
+{p:'A',q:'What does the temporary register inside the ALU hold?',opts:['The next instruction','One of the operands during an operation','The memory address','The clock frequency'],a:1,
+ why:'The accumulator supplies one operand; the temporary register holds the other while the operation takes place. It is the chef\u2019s prep area beside the board.'},
+{p:'B',q:'How many flags does a typical ALU maintain?',opts:['Three','Five','Eight','Sixteen'],a:1,
+ why:'Five flip-flops, each recording one fact about the last result \u2014 commonly zero, negative, carry, overflow and parity.'},
+{p:'B',q:'Flags are physically implemented as:',opts:['Areas of RAM','Flip-flops','Bus lines','Cache slots'],a:1,
+ why:'One flip-flop per flag, holding its value until the next operation overwrites it. That persistence is exactly the memory behaviour of sequential circuits.'},
+{p:'B',q:'The zero flag is set when:',opts:['The instruction fails','The result of the last operation was zero','Memory is empty','The clock stops'],a:1,
+ why:'And that is how a program makes a decision. A conditional jump reads the zero flag and decides whether to overwrite the program counter.'},
+{p:'B',q:'Inside an ALU, when do the adder and the logic units compute their answers?',opts:['Only the selected one computes','All of them compute every cycle, and a multiplexer picks one','They take turns','Only when the accumulator is empty'],a:1,
+ why:'They are all permanently wired and all computing simultaneously. Selecting an answer with a MUX is instant; deciding first and then computing would be slow.'},
+{p:'B',q:'What selects which ALU operation is used?',opts:['The accumulator','Operation-select lines from the control unit, feeding a multiplexer','The program counter','The clock speed'],a:1,
+ why:'The control unit decodes the instruction and sets those select lines. The MUX you built in combinational circuits is doing its real job here.'},
+{p:'B',q:'The accumulator is:',opts:['A register that stores intermediate arithmetic results','A type of cache','The instruction decoder','A bus'],a:0,
+ why:'Values are loaded into it, operated on, and stored back out from it. Early CPUs had exactly one; modern ones have many general-purpose registers instead.'},
+{p:'B',q:'The carry flag would be set when:',opts:['A result is negative','A result is too large to fit in the available bits','An instruction is invalid','The program halts'],a:1,
+ why:'It is the carry-out of the most significant bit of the adder \u2014 the same carry-out you watched ripple along a 4-bit adder. It signals that the true answer needed one more bit than there was room for.'},
+{p:'B',q:'Which components of the ALU did you build yourself in earlier topics?',opts:['None of them','The adder and the multiplexer','Only the flags','Only the accumulator'],a:1,
+ why:'The ripple-carry adder and the multiplexer both came from combinational circuits, and the flags and accumulator are flip-flops and registers from the sequential topics. The whole ALU is familiar parts.'},
+{p:'C',q:'Which register holds the address of the next instruction to be fetched?',opts:['MAR','Program Counter','Instruction Register','Accumulator'],a:1,
+ why:'The PC. A jump instruction simply overwrites it, which is why jumping is cheap.'},
+{p:'C',q:'The Memory Address Register holds:',opts:['Data read from memory','The address currently being accessed','The current instruction','A status flag'],a:1,
+ why:'MAR holds WHERE, MDR holds WHAT. That one sentence answers several exam questions a year.'},
+{p:'C',q:'The Memory Buffer Register (MBR) is described as two-way because:',opts:['It has two clock inputs','It holds data going to memory as well as data coming from it','It is twice the width','It serves two CPUs'],a:1,
+ why:'Everything crossing between the CPU and memory passes through it in both directions. It is the loading dock \u2014 goods in and goods out use the same platform.'},
+{p:'C',q:'The Current Instruction Register (CIR) holds:',opts:['The address of the next instruction','The instruction that has just been fetched, while it is decoded and executed','The result of the last calculation','The stack top'],a:1,
+ why:'It parks the instruction somewhere stable, because the MDR is about to be needed again for the operand.'},
+{p:'C',q:'The stack pointer holds:',opts:['The address of the next instruction','The address of the top of the stack','The last arithmetic result','The clock count'],a:1,
+ why:'The stack is last-in-first-out, and the SP marks where the top currently is. It moves as things are pushed and popped.'},
+{p:'C',q:'In the fetch phase, what is the first transfer that happens?',opts:['MDR to IR','PC to MAR','IR to CU','ACC to memory'],a:1,
+ why:'The CPU must tell memory which address it wants, and that address is in the PC. PC to MAR is always step one.'},
+{p:'C',q:'When is the program counter incremented?',opts:['At the end of execute','During the fetch phase, before the instruction runs','Only on a jump','Never automatically'],a:1,
+ why:'By the time the instruction executes, the PC already points at the next one. That is precisely why a jump works by overwriting it.'},
+{p:'C',q:'How long does the fetch\u2013decode\u2013execute cycle run for?',opts:['Once per program','Until the program is compiled','Continuously from boot until shutdown','Only when a key is pressed'],a:2,
+ why:'The cycle never stops while the machine is on. Even when nothing appears to be happening, the CPU is executing idle instructions.'},
+{p:'C',q:'Why do CPU registers give the fastest access of any storage?',opts:['They use a special material','They are physically inside the processor, so there is no distance to travel','They are larger','They are non-volatile'],a:1,
+ why:'This ties straight back to the storage hierarchy: speed comes from proximity, and nothing is closer to the CPU than a register inside it.'},
+{p:'D',q:'The address bus is:',opts:['Bidirectional','Unidirectional, from the CPU outward','Only used at boot time','The same as the data bus'],a:1,
+ why:'The CPU says where; memory never sends an address back. The data bus, by contrast, must work both ways.'},
+{p:'D',q:'A CPU has a 16-bit address bus. How many memory locations can it address?',opts:['16','256','65,536','1,048,576'],a:2,
+ why:'2\u00b9\u2076 = 65,536, which is 64 KB. The formula is always 2\u207f \u2014 the same 2\u207f you used for truth table rows.'},
+{p:'D',q:'Why could 32-bit computers not use more than about 4 GB of RAM?',opts:['The operating system refused','2\u00b3\u00b2 addresses is about 4 billion, so there were not enough address wires','RAM chips were too expensive','The clock was too slow'],a:1,
+ why:'A hard physical limit, not a software one. Adding one wire doubles the reachable memory, which is why the industry moved to 64-bit addressing.'},
+{p:'D',q:'The control bus carries:',opts:['Memory addresses','Program data','Signals such as read, write, clock and interrupt','Only the clock'],a:2,
+ why:'It carries WHEN and WHICH WAY. The RD and WR lines on it tell memory whether this cycle is a read or a write.'},
+{p:'D',q:'CPU clock speed is generated by:',opts:['The operating system','A crystal oscillator vibrating at a fixed high frequency','The ALU','The power supply'],a:1,
+ why:'A quartz crystal vibrates at an extremely stable rate, and that vibration is turned into the square wave that paces everything.'},
+{p:'D',q:'A processor runs at 2.5 GHz. How many clock cycles is that per second?',opts:['2,500','2.5 million','2.5 billion','2.5 trillion'],a:2,
+ why:'Giga means billion. 2.5 GHz is 2,500,000,000 cycles every second, and the period of each one is about 0.4 nanoseconds.'},
+{p:'D',q:'What is the purpose of cache memory?',opts:['To store files permanently','To hold recently used data close to the CPU so it need not wait for main memory','To increase clock speed','To connect peripherals'],a:1,
+ why:'It is the cookie jar on the counter instead of the pantry downstairs. Small, fast, and holding what you are most likely to want next.'},
+{p:'D',q:'Cache works because of a property of programs called:',opts:['Locality of reference','Data compression','Parallelism','Virtualisation'],a:0,
+ why:'Programs reuse the same data soon after using it (temporal) and use data stored nearby (spatial). Without those habits, cache would be useless.'},
+{p:'E',q:'In immediate addressing, where is the data?',opts:['At the address given in the instruction','In the instruction itself','In a register named by the instruction','On the stack'],a:1,
+ why:'LOAD #5 puts five straight into the accumulator with no memory trip at all. The hash is the giveaway.'},
+{p:'E',q:'In direct addressing, the instruction contains:',opts:['The data','The address of the data','The address of the address of the data','A register number'],a:1,
+ why:'One level of indirection. Go to that address and bring back what is there \u2014 one memory trip.'},
+{p:'E',q:'In indirect addressing, how many memory accesses are needed to get the data?',opts:['None','One','Two','Four'],a:2,
+ why:'The first trip fetches an address; the second fetches the data at that address. Slower, but the target can be changed while the program is running \u2014 this is how pointers work.'},
+{p:'E',q:'Which addressing mode uses the program counter to work out the effective address?',opts:['Direct','Immediate','Relative','Indexed'],a:2,
+ why:'Relative addressing computes the target as an offset from the current PC, which means the program works no matter where in memory it is loaded.'},
+{p:'E',q:'Indexed addressing is particularly useful for:',opts:['Halting the program','Stepping through an array with one instruction in a loop','Setting the clock speed','Clearing the cache'],a:1,
+ why:'Base address plus index register. Increment the index and the same instruction reads the next element \u2014 which is exactly what a loop over an array needs.'},
+{p:'E',q:'In a fixed instruction format:',opts:['Every instruction is the same length','Instruction length varies with the operation','There are no operands','Only one instruction exists'],a:0,
+ why:'Fixed length makes decoding simpler and faster because the CPU always knows where the next instruction starts. Variable length saves memory but complicates decoding.'},
+{p:'E',q:'An instruction is divided into fields. What do the fields specify?',opts:['Only the operation','The operation, plus registers or memory locations the operation works on','The clock speed','The cache size'],a:1,
+ why:'One field carries the opcode and the others carry operands. The decoder in the control unit splits the bit pattern along exactly those field boundaries.'}
+];
+let T={order:[],i:0,answers:{}};
+const grade=p=>p>=85?'A':p>=75?'B':p>=65?'C':p>=50?'D':'F';
+function testStart(list){
+  T={order:list||Q.map((_,i)=>i),i:0,answers:{}};
+  $('#testIntro').classList.add('hide');$('#testDone').classList.add('hide');$('#reviewBox').innerHTML='';
+  $('#testRun').classList.remove('hide');testRender();
+}
+function testRender(){
+  const q=Q[T.order[T.i]];
+  $('#testPos').textContent=`${T.i+1} / ${T.order.length}`;
+  $('#testMeter').style.width=(T.i/T.order.length*100)+'%';
+  $('#testScore').textContent=`${Object.entries(T.answers).filter(([k,v])=>v===Q[k].a).length} correct`;
+  $('#qcard').innerHTML=`<span class="mono" style="font-size:.78rem;color:var(--ink3)">Question ${T.i+1}</span>
+    <span style="font-size:.72rem;background:rgba(59,76,168,.12);color:var(--hot);border-radius:5px;padding:2px 8px;margin-left:8px">Part ${q.p} \u00b7 ${PARTS[q.p]}</span>
+    <p style="font-size:1.12rem;font-family:'Space Grotesk',sans-serif;margin:10px 0 6px;line-height:1.35">${esc(q.q)}</p>
+    <div style="display:grid;gap:9px;margin-top:16px">${q.opts.map((o,i)=>
+      `<button class="opt" data-i="${i}" style="text-align:left;border:1px solid var(--line);background:var(--paper);border-radius:10px;padding:12px 15px;cursor:pointer;display:flex;gap:11px;font-size:.97rem">
+       <span class="mono" style="font-weight:700;color:var(--ink3)">${'ABCD'[i]}</span><span>${esc(o)}</span></button>`).join('')}</div>
+    <div class="feedback" id="qfb"></div>`;
+}
+$('#qcard').addEventListener('click',e=>{
+  const b=e.target.closest('.opt'); if(!b||b.disabled)return;
+  const idx=T.order[T.i],q=Q[idx],pick=+b.dataset.i;
+  T.answers[idx]=pick;
+  $$('#qcard .opt').forEach((o,i)=>{o.disabled=true;
+    if(i===q.a){o.style.background='rgba(17,141,119,.12)';o.style.borderColor='var(--mint)';}
+    else if(i===pick){o.style.background='rgba(224,75,47,.1)';o.style.borderColor='var(--red)';}});
+  const f=$('#qfb'),last=T.i===T.order.length-1;
+  f.className='feedback show '+(pick===q.a?'good':'bad');
+  f.innerHTML=`<b>${pick===q.a?'Correct.':'The answer is '+'ABCD'[q.a]+'.'}</b> ${esc(q.why)}
+    <div class="btnrow"><button class="btn accent" id="qNext">${last?'See my results':'Next question'}</button></div>`;
+  $('#qNext').addEventListener('click',()=>{if(last)return testFinish();T.i++;testRender();$('#qcard').scrollIntoView({block:'nearest'});});
+});
+function testFinish(){
+  $('#testRun').classList.add('hide');$('#testDone').classList.remove('hide');
+  const asked=T.order.length,right=T.order.filter(i=>T.answers[i]===Q[i].a).length,pct=Math.round(right/asked*100);
+  $('#doneScore').textContent=`${right}/${asked}`;
+  $('#doneGrade').textContent=`${pct}%  \u00b7  grade ${grade(pct)}`;
+  $('#doneMsg').textContent=pct>=85?'You can trace an instruction from memory, through the buses, into the ALU and back out \u2014 and explain what every gate along the way is doing. That is the whole course.'
+    :pct>=65?'Solid, with gaps. Find your weakest part below and go replay that section before next class.'
+    :'Go back to the datapath at the top and step through the program slowly a few times, reading each explanation. Everything else on this page hangs off that one animation.';
+  $('#doneBreak').innerHTML=Object.keys(PARTS).map(p=>{
+    const ids=T.order.filter(i=>Q[i].p===p); if(!ids.length)return '';
+    const ok=ids.filter(i=>T.answers[i]===Q[i].a).length;
+    return `<div style="display:flex;align-items:center;gap:12px;font-size:.92rem">
+      <span style="flex:1 1 auto"><b>Part ${p}</b> \u00b7 ${PARTS[p]}</span>
+      <span style="width:110px;height:8px;background:var(--lowbg);border-radius:999px;overflow:hidden">
+        <i style="display:block;height:100%;background:var(--mint);width:${ok/ids.length*100}%"></i></span>
+      <span class="mono" style="font-size:.84rem;color:var(--ink2);min-width:3.6em;text-align:right">${ok}/${ids.length}</span></div>`;
+  }).join('');
+  const missed=T.order.filter(i=>T.answers[i]!==Q[i].a);
+  $('#retryWrong').classList.toggle('hide',!missed.length);
+  $('#retryWrong').onclick=()=>testStart(missed);
+  $('#testDone').scrollIntoView({block:'start'});
+}
+$('#testStart').addEventListener('click',()=>testStart());
+$('#testQuit').addEventListener('click',testFinish);
+$('#retryAll').addEventListener('click',()=>testStart());
+$('#reviewAll').addEventListener('click',()=>{
+  $('#reviewBox').innerHTML=`<h3 style="margin:30px 0 14px">Every question, with the reasoning</h3>`+
+    Q.map((q,i)=>`<div class="panel"><span class="mono" style="font-size:.78rem;color:var(--ink3)">Q${i+1}</span>
+      <span style="font-size:.72rem;background:rgba(59,76,168,.12);color:var(--hot);border-radius:5px;padding:2px 8px;margin-left:8px">Part ${q.p}</span>
+      <p style="font-family:'Space Grotesk',sans-serif;font-size:1rem;margin:8px 0 0">${esc(q.q)}</p>
+      <p style="margin:6px 0 0"><b>${'ABCD'[q.a]}.</b> ${esc(q.opts[q.a])}</p>
+      <p style="margin:6px 0 0;color:var(--ink2);font-size:.94rem">${esc(q.why)}</p></div>`).join('');
+  $('#reviewBox').scrollIntoView({block:'start'});
+});
+</script>
+</body>
+</html>
